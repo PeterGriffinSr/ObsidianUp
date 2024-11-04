@@ -1,0 +1,208 @@
+#!/bin/bash
+
+REPO="PeterGriffinSr/Obsidian"
+INSTALL_DIR="$HOME/.obsidian"
+BIN_DIR="$HOME/.local/bin"
+OBSIDIAN_BINARY="obsidian"
+
+GREEN="\033[1;32m"
+RED="\033[1;31m"
+RESET="\033[0m"
+
+function install_dependencies {
+    local packages=("libstdc++6" "clang-14" "build-essential")
+    case "$1" in
+    	apt)
+		sudo apt update -y && sudo apt install -y "${packages[@]}"
+		;;
+	dnf)
+		sudo dnf install -y "${packages[@]}"
+		;;
+	pacman)
+		sudo pacman -Sy --needed gcc llvm14 clang base-devel
+		;;
+	yay)
+		yay -S gcc llvm14 clang base-devel
+		;;
+	*)
+		echo "Unsupported package manager: $1"
+		exit 1
+		;;
+	esac
+}
+
+function info {
+    echo -e "${GREEN}$1${RESET}"
+}
+
+function error {
+    echo -e "${RED}$1${RESET}" >&2
+}
+
+function uninstall_obsidian {
+    info "Uninstalling Obsidian..."
+
+    if [ -L "$BIN_DIR/$OBSIDIAN_BINARY" ]; then
+        rm "$BIN_DIR/$OBSIDIAN_BINARY"
+        info "Removed symlink $BIN_DIR/$OBSIDIAN_BINARY"
+    fi
+
+    if [ -d "$INSTALL_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        info "Removed installation directory $INSTALL_DIR"
+    fi
+
+    SHELL_NAME=$(basename "$SHELL")
+    case "$SHELL_NAME" in
+        "bash")
+            PROFILE_FILE="$HOME/.bashrc"
+            ;;
+        "zsh")
+            PROFILE_FILE="$HOME/.zshrc"
+            ;;
+        "fish")
+            PROFILE_FILE="$HOME/.config/fish/config.fish"
+            ;;
+        *)
+            error "Unsupported shell: $SHELL_NAME. Please remove $BIN_DIR from your PATH manually."
+            return
+            ;;
+    esac
+
+    if grep -q "$BIN_DIR" "$PROFILE_FILE"; then
+        sed -i "\|export PATH=\"$BIN_DIR:\$PATH\"|d" "$PROFILE_FILE"
+        info "Removed $BIN_DIR from PATH in $PROFILE_FILE"
+    fi
+
+    info "Obsidian has been successfully uninstalled."
+    exit 0
+}
+
+if [ "$1" == "--uninstall" ]; then
+    uninstall_obsidian
+fi
+
+command -v curl >/dev/null 2>&1 || { error "curl is required but not installed. Aborting."; exit 1; }
+command -v tar >/dev/null 2>&1 || { error "tar is required but not installed. Aborting."; exit 1; }
+command -v sha256sum >/dev/null 2>&1 || { error "sha256sum is required but not installed. Aborting."; exit 1; }
+command -v jq >/dev/null 2>&1 || { error "jq is required but not installed. Aborting."; exit 1; }
+
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if command -v apt &> /dev/null; then
+        echo "Detected Debian/Ubuntu-based system."
+        install_dependencies "apt"
+    elif command -v dnf &> /dev/null; then
+        echo "Detected Fedora/Red Hat-based system."
+        install_dependencies "dnf"
+    elif command -v pacman &> /dev/null; then
+        echo "Detected Arch-based system."
+        install_dependencies "pacman" || "yay"
+    else
+        echo "Unsupported Linux distribution."
+        exit 1
+    fi
+
+else
+    echo "Unsupported OS type: $OSTYPE"
+    exit 1
+fi
+
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case $ARCH in
+    x86_64) ARCH="x86_64";;
+    aarch64) ARCH="arm64";;
+    *) error "Unsupported architecture: $ARCH"; exit 1;;
+esac
+
+VERSION="${1:-latest}"
+API_URL="https://api.github.com/repos/$REPO/releases"
+
+info "Fetching release info for $REPO (version: $VERSION)..."
+
+if [ "$VERSION" == "latest" ]; then
+    RELEASE_DATA=$(curl -s "$API_URL" | jq 'map(select(.prerelease or .draft == false)) | .[0]')
+else
+    RELEASE_DATA=$(curl -s "$API_URL" | jq "map(select(.tag_name == \"$VERSION\")) | .[0]")
+fi
+
+TAG_NAME=$(echo "$RELEASE_DATA" | jq -r '.tag_name')
+if [ "$TAG_NAME" == "null" ] || [ -z "$TAG_NAME" ]; then
+    error "Failed to fetch release info for version '$VERSION'. Aborting."
+    exit 1
+fi
+
+info "Release found: $TAG_NAME"
+
+EXPECTED_TARBALL_NAME="obsidian-${OS}-${ARCH}.tar.gz"
+EXPECTED_CHECKSUM_NAME="${ARCH}.sha256"
+
+TARBALL_URL=$(echo "$RELEASE_DATA" | jq -r ".assets[] | select(.name == \"$EXPECTED_TARBALL_NAME\") | .browser_download_url")
+CHECKSUM_URL=$(echo "$RELEASE_DATA" | jq -r ".assets[] | select(.name == \"$EXPECTED_CHECKSUM_NAME\") | .browser_download_url")
+
+if [ -z "$TARBALL_URL" ] || [ -z "$CHECKSUM_URL" ]; then
+    error "Required assets (tarball or checksum) not found for this release. Aborting."
+    exit 1
+fi
+
+info "Downloading assets for release $TAG_NAME..."
+
+mkdir -p "$INSTALL_DIR" "$BIN_DIR"
+curl -L -o "$INSTALL_DIR/$EXPECTED_TARBALL_NAME" "$TARBALL_URL"
+curl -L -o "$INSTALL_DIR/$EXPECTED_CHECKSUM_NAME" "$CHECKSUM_URL"
+
+info "Verifying checksum..."
+cd "$INSTALL_DIR"
+if ! sha256sum -c "$EXPECTED_CHECKSUM_NAME"; then
+    error "Checksum verification failed. The downloaded file may be corrupted. Aborting."
+    rm -f "$EXPECTED_TARBALL_NAME" "$EXPECTED_CHECKSUM_NAME"
+    exit 1
+fi
+
+info "Checksum verified. Extracting files..."
+tar -xzvf "$EXPECTED_TARBALL_NAME" -C "$INSTALL_DIR"
+
+EXTRACTED_BINARY="$INSTALL_DIR/obsidian-${OS}-${ARCH}"
+if [ ! -f "$EXTRACTED_BINARY" ]; then
+    error "Failed to find the extracted binary '$EXTRACTED_BINARY'. Aborting."
+    exit 1
+fi
+
+ln -sf "$EXTRACTED_BINARY" "$BIN_DIR/$OBSIDIAN_BINARY"
+info "Created symlink for Obsidian binary at $BIN_DIR/$OBSIDIAN_BINARY"
+
+rm -f "$EXPECTED_TARBALL_NAME" "$EXPECTED_CHECKSUM_NAME"
+
+if [ ! -x "$BIN_DIR/$OBSIDIAN_BINARY" ]; then
+    error "Symlink creation failed. The target binary is not executable. Aborting."
+    exit 1
+fi
+
+SHELL_NAME=$(basename "$SHELL")
+PROFILE_FILE=""
+
+case "$SHELL_NAME" in
+    "bash")
+        PROFILE_FILE="$HOME/.bashrc"
+        ;;
+    "zsh")
+        PROFILE_FILE="$HOME/.zshrc"
+        ;;
+    "fish")
+        PROFILE_FILE="$HOME/.config/fish/config.fish"
+        ;;
+    *)
+        error "Unsupported shell: $SHELL_NAME. Please add $BIN_DIR to your PATH manually."
+        exit 1
+        ;;
+esac
+
+if ! grep -q "$BIN_DIR" "$PROFILE_FILE"; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$PROFILE_FILE"
+    info "Added $BIN_DIR to PATH in $PROFILE_FILE"
+else
+    info "$BIN_DIR is already in PATH in $PROFILE_FILE"
+fi
+
+info "Obsidian has been successfully installed!"
+echo "Run 'obsidian --version' to verify the installation."
