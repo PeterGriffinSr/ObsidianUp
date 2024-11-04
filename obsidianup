@@ -199,6 +199,7 @@ esac
 
 if ! grep -q "$BIN_DIR" "$PROFILE_FILE"; then
     echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$PROFILE_FILE"
+    source "$PROFILE_NAME"
     info "Added $BIN_DIR to PATH in $PROFILE_FILE"
 else
     info "$BIN_DIR is already in PATH in $PROFILE_FILE"
