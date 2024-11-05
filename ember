@@ -117,7 +117,7 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     detect_package_manager
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     info "macOS detected. Installing packages via Homebrew..."
-    curl -fsSL https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.xz
+    curl https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.xz
     sudo mkdir /opt/llvm-14
     tar -xf clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.gz
     sudo mv clang+llvm-14.0.6-arm64-apple-darwin22.3.0 /opt/llvm-14/
@@ -169,7 +169,7 @@ fi
 info "Release found: $TAG_NAME"
 
 EXPECTED_TARBALL_NAME="obsidian-${OS}-${ARCH}.tar.gz"
-EXPECTED_CHECKSUM_NAME="${ARCH}.sha256"
+EXPECTED_CHECKSUM_NAME="${OS}-${ARCH}.sha256"
 TARBALL_URL=$(echo "$RELEASE_DATA" | jq -r ".assets[] | select(.name == \"$EXPECTED_TARBALL_NAME\") | .browser_download_url")
 CHECKSUM_URL=$(echo "$RELEASE_DATA" | jq -r ".assets[] | select(.name == \"$EXPECTED_CHECKSUM_NAME\") | .browser_download_url")
 
