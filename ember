@@ -215,5 +215,7 @@ else
     info "$BIN_DIR is already in PATH in $PROFILE_FILE"
 fi
 
+chmod +x $HOME/.local/bin/obsidian
+
 info "Installation of Obsidian completed successfully!"
 echo "To confirm, run 'obsidian --version'."
