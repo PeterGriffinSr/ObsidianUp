@@ -117,7 +117,30 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     detect_package_manager
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     info "macOS detected. Installing packages via Homebrew..."
-    brew update && brew install llvm@14 gcc || { error "Homebrew is required on macOS. Please install it."; exit 1; }
+    curl -fsSL https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.xz
+    sudo mkdir /opt/llvm-14
+    tar -xf clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.gz
+    sudo mv clang+llvm-14.0.6-arm64-apple-darwin22.3.0 /opt/llvm-14/
+
+    PROFILE_FILE=""
+    case "$(basename "$SHELL")" in
+        bash) PROFILE_FILE="$HOME/.bash_profile" ;;
+        zsh) PROFILE_FILE="$HOME/.zshrc" ;;
+        fish) PROFILE_FILE="$HOME/.config/fish/config.fish" ;;
+        *) error "Unsupported shell. Add export statements to PATH manually." ;;
+    esac
+
+    if [[ -n "$PROFILE_FILE" ]]; then
+        if ! grep -q "/opt/llvm-14/bin" "$PROFILE_FILE"; then
+            echo "export PATH=\"/opt/llvm-14/bin:\$PATH\"" >> "$PROFILE_FILE"
+            echo "export LDFLAGS=\"-L/opt/llvm-14/lib\"" >> "$PROFILE_FILE"
+            echo "export CPPFLAGS=\"-I/opt/llvm-14/include\"" >> "$PROFILE_FILE"
+            source "$PROFILE_FILE"
+            info "Added LLVM paths to $PROFILE_FILE"
+        else
+            info "LLVM paths already in $PROFILE_FILE"
+        fi
+    fi
 else
     error "Unsupported OS: $OSTYPE"
     exit 1
