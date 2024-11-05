@@ -123,10 +123,11 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     detect_package_manager
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     info "macOS detected. Installing packages via Homebrew..."
-    curl https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.xz
-    sudo mkdir /opt/llvm-14
-    tar -xf clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.gz
-    sudo mv clang+llvm-14.0.6-arm64-apple-darwin22.3.0 /opt/llvm-14/
+    # curl https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.xz
+    # sudo mkdir /opt/llvm-14
+    # tar -xf clang+llvm-14.0.6-arm64-apple-darwin22.3.0.tar.gz
+    # sudo mv clang+llvm-14.0.6-arm64-apple-darwin22.3.0 /opt/llvm-14/
+    brew install llvm@14
 
     PROFILE_FILE=""
     case "$(basename "$SHELL")" in
