@@ -32,12 +32,18 @@ function confirm {
     esac
 }
 
+function check_command {
+    command -v "$1" &>/dev/null
+}
+
 function check_dependencies {
     info "Checking for required dependencies..."
     for dep in "${DEPENDENCIES[@]}"; do
-        if ! command -v "$dep" &>/dev/null; then
+        if ! check_command "$dep"; then
             warn "Missing dependency: '$dep'. Installation may fail if not available."
             return 1
+        else
+            info "'$dep' is already installed."
         fi
     done
 }
