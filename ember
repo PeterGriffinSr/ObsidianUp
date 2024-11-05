@@ -48,6 +48,15 @@ function check_dependencies {
     done
 }
 
+function check_macos_dependencies {
+    if [ -f "/opt/homebrew/opt/llvm@14/lib/libLLVM.dylib" ]; then
+        info "llvm@14 is already installed."
+    else
+        warn "llvm@14 is not installed. Please install it via Homebrew (brew install llvm@14)."
+        return 1
+    fi
+}
+
 function install_dependencies {
     local packages=("libstdc++6" "clang-14" "build-essential")
     case "$1" in
@@ -122,7 +131,11 @@ check_dependencies || {
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     detect_package_manager
 elif [[ "$OSTYPE" == "darwin"* ]]; then
-    warn "macOS detected. Please install llvm@14 maunully"
+    info "macOS detected. Checking for llvm@14..."
+    check_macos_dependencies || {
+        warn "Please install llvm@14 via Homebrew (brew install llvm@14). Exiting."
+        exit 1
+    }
 else
     error "Unsupported OS: $OSTYPE"
     exit 1
